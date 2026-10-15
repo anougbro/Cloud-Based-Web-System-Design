@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { ApiError, api, money } from "./api.js";
+import { ApiError, CURRENCY, api, money } from "./api.js";
 
 const PERIODS = [
   { value: "all", label: "All time" },
@@ -8,6 +8,15 @@ const PERIODS = [
 ];
 
 const PAGE_SIZE = 25;
+
+// Categories offered as suggestions. The input stays free text so an
+// unexpected category is never blocked; the list only shortens the common case.
+const CATEGORIES = [
+  "courses", "transport", "loisirs", "sante", "energie", "telecom", "courses",
+  "salaire", "loyer", "freelance", "nourriture",
+].filter((v, i, a) => a.indexOf(v) === i);
+
+const HINT_KEY = "pocketwise.roundupHintSeen";
 
 export default function Dashboard({ token, onLogout, onUnauthorized }) {
   const [period, setPeriod] = useState("all");
@@ -22,6 +31,14 @@ export default function Dashboard({ token, onLogout, onUnauthorized }) {
   const [busy, setBusy] = useState("");
   const [loading, setLoading] = useState(true);
   const [goalsLoading, setGoalsLoading] = useState(true);
+  const [toast, setToast] = useState(null);
+  const [hintSeen, setHintSeen] = useState(() => {
+    try {
+      return window.localStorage.getItem(HINT_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const seq = useRef(0);
   const goalSeq = useRef(0);
   const confirmRef = useRef(null);
@@ -34,6 +51,29 @@ export default function Dashboard({ token, onLogout, onUnauthorized }) {
   const goalNameId = `${uid}-goal-name`;
   const goalTargetId = `${uid}-goal-target`;
   const confirmId = `${uid}-confirm`;
+  const toastId = `${uid}-toast`;
+  const categoriesId = `${uid}-categories`;
+
+  // Polite announcement: a toast is a confirmation, not an interruption, so
+  // it must not steal focus or interrupt a screen reader mid-sentence.
+  const notify = useCallback((message) => {
+    setToast(message);
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const t = window.setTimeout(() => setToast(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+
+  const dismissHint = useCallback(() => {
+    setHintSeen(true);
+    try {
+      window.localStorage.setItem(HINT_KEY, "1");
+    } catch {
+      /* private mode: the hint simply returns on the next load */
+    }
+  }, []);
 
   const handleError = useCallback((err) => {
     if (err instanceof ApiError && err.status === 401) {
@@ -92,12 +132,13 @@ export default function Dashboard({ token, onLogout, onUnauthorized }) {
     if (confirm && confirmRef.current) confirmRef.current.focus();
   }, [confirm]);
 
-  async function run(key, fn) {
+  async function run(key, fn, onSuccess) {
     setError(null);
     setBusy(key);
     try {
       await fn();
       await reload();
+      if (onSuccess) notify(onSuccess);
     } catch (err) {
       handleError(err);
     } finally {
@@ -117,13 +158,22 @@ export default function Dashboard({ token, onLogout, onUnauthorized }) {
       setError({ status: null, message: "Enter an amount greater than 0." });
       return;
     }
+    let added = null;
     await run("add-tx", async () => {
-      await api("/transactions", {
+      added = await api("/transactions", {
         method: "POST",
         token,
         body: { kind: tx.kind, category: tx.category.trim(), amount_cents: cents },
       });
       setTx({ kind: tx.kind, category: "", amount: "" });
+    }, () => {
+      dismissHint();
+      // The server owns the round-up arithmetic; echoing its value keeps the
+      // confirmation honest instead of re-deriving it here.
+      if (tx.kind === "expense" && added && added.roundup_cents > 0) {
+        return `${money(added.amount_cents + added.roundup_cents)} recorded — ${money(added.roundup_cents)} added to round-up savings.`;
+      }
+      return `${tx.kind === "income" ? "Income" : "Expense"} of ${money(cents)} recorded.`;
     });
   }
 
@@ -141,7 +191,7 @@ export default function Dashboard({ token, onLogout, onUnauthorized }) {
         body: { name: goal.name.trim(), target_cents: cents },
       });
       setGoal({ name: "", target: "" });
-    });
+    }, () => `Goal "${goal.name.trim()}" created.`);
   }
 
   function askDeleteTx(t) {
@@ -151,7 +201,7 @@ export default function Dashboard({ token, onLogout, onUnauthorized }) {
       action: () => run(`tx-${t.id}`, async () => {
         await api(`/transactions/${t.id}`, { method: "DELETE", token });
         if (page.items.length <= 1 && offset > 0) setOffset(Math.max(0, offset - PAGE_SIZE));
-      }),
+      }, () => "Transaction deleted."),
     });
   }
 
@@ -159,7 +209,7 @@ export default function Dashboard({ token, onLogout, onUnauthorized }) {
     setConfirm({
       label: "Delete this goal?",
       text: `"${g.name}" and its saved progress of ${money(g.saved_cents)} out of ${money(g.target_cents)} will be lost. This cannot be undone.`,
-      action: () => run(`goal-${g.id}`, () => api(`/goals/${g.id}`, { method: "DELETE", token })),
+      action: () => run(`goal-${g.id}`, () => api(`/goals/${g.id}`, { method: "DELETE", token }), () => `Goal "${g.name}" deleted.`),
     });
   }
 
@@ -192,6 +242,10 @@ export default function Dashboard({ token, onLogout, onUnauthorized }) {
         ))}
       </fieldset>
 
+      <div className="toast-slot" role="status" aria-live="polite" aria-atomic="true">
+        {toast && <p className="toast" key={toastId}>{toast}</p>}
+      </div>
+
       {error && (
         <p role="alert" className="error">
           {error.status ? <span className="badge">HTTP {error.status}</span> : null}
@@ -211,7 +265,6 @@ export default function Dashboard({ token, onLogout, onUnauthorized }) {
         <div className="card">
           <span>Spent (incl. round-ups)</span>
           <strong>{summary ? money(summary.expense_cents) : "—"}</strong>
-          <span className="hint">A {money(1250)} expense can be recorded as {money(1300)}: the difference goes to round-up savings.</span>
         </div>
         <div className="card accent">
           <span>Round-up savings</span>
@@ -226,6 +279,19 @@ export default function Dashboard({ token, onLogout, onUnauthorized }) {
         )}
       </section>
 
+      {/* The round-up rule is explained once, then it gets out of the way.
+          It used to live permanently inside the "Spent" tile, competing with
+          the number it was meant to illustrate. */}
+      {!hintSeen && (
+        <aside className="teach" aria-label="How round-up savings work">
+          <p className="teach-body">
+            Every expense is charged to the next whole {CURRENCY}1. A {money(1250)} purchase
+            is recorded as {money(1300)}, and the {money(50)} difference is set aside.
+          </p>
+          <button type="button" className="link" onClick={dismissHint}>Got it</button>
+        </aside>
+      )}
+
       <section className="grid">
         <div className="card">
           <h2>Add transaction</h2>
@@ -236,9 +302,35 @@ export default function Dashboard({ token, onLogout, onUnauthorized }) {
               <option value="income">Income</option>
             </select>
             <label htmlFor={txCategoryId}>Category</label>
-            <input id={txCategoryId} name="category" placeholder="food, rent…" required value={tx.category} onChange={(e) => setTx({ ...tx, category: e.target.value })} />
+            <input
+              id={txCategoryId}
+              name="category"
+              list={categoriesId}
+              placeholder="food, rent…"
+              autoComplete="off"
+              required
+              value={tx.category}
+              onChange={(e) => setTx({ ...tx, category: e.target.value })}
+            />
+            <datalist id={categoriesId}>
+              {CATEGORIES.map((c) => <option key={c} value={c} />)}
+            </datalist>
             <label htmlFor={txAmountId}>Amount</label>
-            <input id={txAmountId} name="amount" type="number" step="0.01" min="0.01" inputMode="decimal" placeholder="0.00" required value={tx.amount} onChange={(e) => setTx({ ...tx, amount: e.target.value })} />
+            <div className="field">
+              <span className="cur" aria-hidden="true">{CURRENCY}</span>
+              <input
+                id={txAmountId}
+                name="amount"
+                type="number"
+                step="0.01"
+                min="0.01"
+                inputMode="decimal"
+                placeholder="0.00"
+                required
+                value={tx.amount}
+                onChange={(e) => setTx({ ...tx, amount: e.target.value })}
+              />
+            </div>
             <button type="submit" disabled={busy === "add-tx"}>{busy === "add-tx" ? "Adding…" : "Add"}</button>
           </form>
         </div>
@@ -249,7 +341,21 @@ export default function Dashboard({ token, onLogout, onUnauthorized }) {
             <label htmlFor={goalNameId}>Goal name</label>
             <input id={goalNameId} name="goal" placeholder="New laptop" required value={goal.name} onChange={(e) => setGoal({ ...goal, name: e.target.value })} />
             <label htmlFor={goalTargetId}>Target</label>
-            <input id={goalTargetId} name="target" type="number" step="0.01" min="0.01" inputMode="decimal" placeholder="0.00" required value={goal.target} onChange={(e) => setGoal({ ...goal, target: e.target.value })} />
+            <div className="field">
+              <span className="cur" aria-hidden="true">{CURRENCY}</span>
+              <input
+                id={goalTargetId}
+                name="target"
+                type="number"
+                step="0.01"
+                min="0.01"
+                inputMode="decimal"
+                placeholder="0.00"
+                required
+                value={goal.target}
+                onChange={(e) => setGoal({ ...goal, target: e.target.value })}
+              />
+            </div>
             <button type="submit" disabled={busy === "add-goal"}>{busy === "add-goal" ? "Adding…" : "Add goal"}</button>
           </form>
           {goalsLoading && <p className="state" role="status">Loading goals…</p>}
@@ -259,6 +365,7 @@ export default function Dashboard({ token, onLogout, onUnauthorized }) {
               <li key={g.id} className="goal">
                 <div className="goal-head">
                   <span>{g.name}: {money(g.saved_cents)} / {money(g.target_cents)}</span>
+                  <span className="goal-pct">{Math.round(g.progress_pct)}%</span>
                   <button
                     type="button"
                     className="link danger"

@@ -331,6 +331,93 @@ input:focus, select:focus {
 
 input:disabled, select:disabled { opacity: 0.55; cursor: not-allowed; }
 
+/* Currency affordance -----------------------------------------------------
+   The application is single-currency, so the input says so. The symbol is
+   aria-hidden because the label already reads "Amount" -- announcing "euro"
+   twice is noise. */
+.field { position: relative; display: flex; }
+
+.field .cur {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: var(--text-md);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.field input { padding-left: 1.9rem; }
+
+/* Confirmation toast -----------------------------------------------------
+   role="status" + aria-live="polite": announced without interrupting, and it
+   never moves focus, so a screen-reader user is not thrown out of the field
+   they are still typing in. */
+.toast-slot {
+  position: sticky;
+  top: var(--sp-3);
+  z-index: 5;
+  display: grid;
+  justify-items: start;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  font-size: var(--text-sm);
+  font-weight: 560;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--accent-tint-strong);
+  border-radius: var(--r-pill);
+  box-shadow: var(--lift-3);
+  animation: toast-in 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.toast::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  flex: none;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-0.5rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* First-run explainer ---------------------------------------------------- */
+.teach {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--accent-tint);
+  border: 1px solid var(--accent-tint-strong);
+  border-radius: var(--r-md);
+}
+
+.teach-body { margin: 0; font-size: var(--text-sm); color: var(--ink-soft); max-width: 62ch; }
+
+/* Goal progress ---------------------------------------------------------- */
+.goal-pct {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-dark);
+}
+
+@media (prefers-color-scheme: dark) { .goal-pct { color: var(--accent); } }
+
 /* ---------------------------------------------------------------------------
    Buttons
    ------------------------------------------------------------------------- */
@@ -370,17 +457,33 @@ button.link {
   box-shadow: none;
 }
 
-button.link:hover:not(:disabled) {
+/* Destructive row actions sit next to data a user may be reading, and a
+   26px-tall link is a mis-tap waiting to happen. The 44px minimum is an
+   absolute ergonomic measurement, not a proportional one -- deliberately in
+   px, because the root font-size is scaled and `rem` would drift under it. */
+button.link.danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding-inline: var(--sp-3);
+  color: var(--danger);
+}
+
+button.link.danger:hover:not(:disabled) { background: var(--danger-tint); color: var(--danger-dark); }
+
+button.link:not(.danger):hover:not(:disabled) {
   background: var(--accent-tint);
   color: var(--accent-deep);
   box-shadow: none;
   filter: none;
 }
 
-@media (prefers-color-scheme: dark) { button.link { color: var(--accent); } }
-
-button.link.danger { color: var(--danger); }
-button.link.danger:hover:not(:disabled) { background: var(--danger-tint); color: var(--danger-dark); }
+@media (prefers-color-scheme: dark) {
+  button.link:not(.danger) { color: var(--accent); }
+  button.link:not(.danger):hover:not(:disabled) { color: var(--accent); }
+}
 
 button.danger-btn {
   background: linear-gradient(180deg, var(--danger) 0%, var(--danger-dark) 100%);
