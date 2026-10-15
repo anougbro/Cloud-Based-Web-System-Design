@@ -1,0 +1,13 @@
+# Pinned exactly: this file is the production install target and is audited in CI.
+# starlette is listed explicitly even though FastAPI depends on it, because
+# it carries the reachable advisories (PYSEC-2026-249 / -1941). A floating
+# transitive dependency is a dependency you do not control.
+fastapi==0.143.1
+starlette==1.8.0
+uvicorn[standard]==0.54.0
+sqlalchemy==2.0.35
+alembic==1.20.0
+psycopg2-binary==2.9.10
+pyjwt==2.15.1
+pydantic==2.14.1
+email-validator==2.3.0
