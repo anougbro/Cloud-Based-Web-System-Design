@@ -10,7 +10,7 @@ Most personal finance advice is delivered as information. Students are told to b
 
 This project builds **PocketWise**, a web application that converts saving from an intention into a by-product of an action the user was going to take anyway. Every expense is charged to the next whole euro, and the difference is redirected into a savings pot that fills savings goals automatically. A €12.50 purchase is recorded as €13.00, and €0.50 is redirected. The user does not decide to save; the system saves on their behalf, and the visible cost of doing so is approximately one euro.
 
-The choice is deliberate. Saving from spare change sounds trivial, and the amount involved is genuinely small. The design rationale is not that the sums are large, but that the *friction is removed entirely*. The intervention targets the point at which most budgeting attempts fail — the moment a decision is required — by removing the decision rather than by improving the information supporting it.
+The choice is deliberate. Saving from spare change sounds trivial, and the sum is genuinely small. The rationale is not that the amounts are large, but that the *friction is removed entirely*. The intervention targets the point at which most budgeting attempts fail — the moment a decision is required — by removing the decision rather than improving the information supporting it.
 
 ## 2. Background and Literature Review
 
@@ -95,9 +95,9 @@ Full decision records (ADR-001 to ADR-010) are in `docs/architecture.md`. The fo
 
 **Money is stored as integer cents, end to end.** No `float` appears in any monetary path — schema, model column, or business function. Division by 100 occurs only at render time in the client. This directly discharges requirement 4.
 
-**Savings are a derived state, not a stored balance.** No savings balance is persisted. The total is recomputed by SQL aggregation on every read and distributed across goals by a cascade function. This was a deliberate trade: an incremental balance is faster to write, but it introduces an invariant that every create, update and delete must maintain, and that invariant will eventually be violated. Storing only facts means deleting an expense automatically reduces goal progress with no compensating logic to get wrong. The cost is a per-user aggregation on read, which the composite index `(user_id, occurred_on, id)` covers.
+**Savings are a derived state, not a stored balance.** No savings balance is persisted. The total is recomputed by SQL aggregation on every read and distributed across goals by a cascade function. This trades read cost for correctness: an incremental balance is faster to write, but it introduces an invariant every create, update and delete must maintain, and that invariant will eventually be violated. Storing only facts means deleting an expense automatically reduces goal progress with no compensating logic to get wrong.
 
-**Business rules live in an I/O-free module.** `app/domain.py` imports only `collections`, `dataclasses`, `enum` and `typing`. The round-up formula, the cascade allocation and the summary arithmetic are total functions with no side effects. This makes the most valuable logic testable without a database, an HTTP client or heavy fixtures, and the module reaches 100% test coverage as a direct consequence. The boundary is enforced as a review rule: any function in `domain.py` that needed a session would be, by construction, in the wrong module.
+**Business rules live in an I/O-free module.** `app/domain.py` imports only `collections`, `dataclasses`, `enum` and `typing`. The round-up formula, the cascade allocation and the summary arithmetic are total functions with no side effects, which makes the most valuable logic testable without a database or an HTTP client, and reaches 100% coverage as a direct consequence. The boundary is enforced as a review rule: any function in `domain.py` that needed a session would be, by construction, in the wrong module.
 
 **Round-ups are never applied to income.** `savings_from` returns zero for a credit, and a database `CHECK` constraint prevents a non-zero round-up on income rows. Applying savings to income would be a silent double-count.
 
@@ -109,17 +109,17 @@ Total savings are distributed across goals in creation order, oldest first. A fi
 
 ### 4.5 Interface design
 
-The front end is a single hand-written stylesheet with no CSS framework. The design system is expressed as custom properties — a type scale, a 4px spacing scale, three elevation levels, and semantic colour tokens — and every component consumes those tokens rather than hard-coded values. There is no build step for styling and no runtime CSS-in-JS, so the whole visual layer costs 12 kB uncompressed (3.3 kB gzipped).
+The front end is a single hand-written stylesheet with no CSS framework. The design system is expressed as custom properties — a type scale, a 4px spacing scale, three elevation levels, and semantic colour tokens — and every component consumes those tokens rather than hard-coded values. There is no build step for styling and no runtime CSS-in-JS, so the whole visual layer costs 13.6 kB (3.6 kB gzipped).
 
 Three decisions are worth naming:
 
 **Money is treated as data, not prose.** Every figure uses tabular numerals so columns of amounts align on the decimal point regardless of digit count. On a screen where a user compares eleven thousand against four thousand, misaligned figures cost real scanning effort.
 
-**Elevation is hairline-first.** Surfaces are defined by a one-pixel border plus a single soft shadow, in three steps. Heavy drop shadows were rejected: they separate elements visually but detach them from the same surface, which is wrong for a dense financial table.
+**Elevation is hairline-first.** Surfaces are defined by a one-pixel border plus a single soft shadow, in three steps. Heavy shadows separate elements visually but detach them from the same surface, which is wrong for a dense financial table.
 
-**The palette carries two accents, not one.** `--accent` is the interactive colour and brightens in dark mode, where it suits dark-on-bright controls. `--accent-solid` is reserved for surfaces that carry white text. A single accent produced a measured 1.8:1 contrast ratio in dark mode; separating the two brings it to 21:1. The token boundary exists specifically to make that failure impossible.
+**The palette carries two accents, not one.** `--accent` is the interactive colour and brightens in dark mode, where it suits dark-on-bright controls. `--accent-solid` is reserved for surfaces carrying white text. A single accent measured 1.8:1 in dark mode; separating the two brings it to 21:1. The boundary exists to make that failure impossible.
 
-Accessibility was treated as a requirement rather than a pass at the end. Focus is visible on every interactive element via a 3px outline that survives both colour schemes, colour is never the sole carrier of meaning (income and expense differ in sign as well as hue), motion respects `prefers-reduced-motion`, and light and dark schemes are both derived from the same token set rather than maintained separately.
+Accessibility was a requirement rather than a pass at the end. Focus is visible on every interactive element via a 3px outline that survives both colour schemes, colour is never the sole carrier of meaning, touch targets meet the 44px minimum, motion respects `prefers-reduced-motion`, and both schemes derive from one token set.
 
 ### 4.6 Data model
 
@@ -163,21 +163,23 @@ The frontend is a hand-written React SPA built with Vite, with no router. Authen
 
 ## 7. Testing and Continuous Integration
 
-The suite comprises 72 tests across four modules covering authentication, domain logic, transactions and goals. Current coverage is **93.3%**, against a CI-enforced threshold of 85%.
+The suite comprises 78 Python tests across five modules covering authentication, domain logic, transactions, goals and connection-string derivation, plus 7 front-end tests. Current backend coverage is **93.9%**, against a CI-enforced threshold of 85%.
 
 The test strategy follows the architecture rather than the endpoints. Domain rules are tested as pure functions with no fixtures; router and query behaviour is tested through the HTTP layer against an in-memory SQLite database shared via `StaticPool`, so the suite is executable with no external dependency. Coverage is enforced as a hard gate — a regression below threshold fails the build rather than producing a report nobody reads.
 
-Static analysis runs alongside tests: `ruff` for lint and formatting, `mypy` in strict mode for type correctness, and `pip-audit` for dependency vulnerabilities. All pass with no findings. Dependency pins are exact rather than ranged, and Starlette is pinned explicitly despite being a FastAPI transitive dependency, because a floating transitive dependency is a dependency not under the project's control.
+Static analysis runs alongside tests on both stacks: `ruff`, `mypy` in strict mode and `pip-audit` on the back end; ESLint with the React Hooks rules, `vitest` and `npm audit` on the front end. The Hooks rules matter here because the dashboard guards its async loads with sequence numbers, and a stale closure surfaces only as a duplicated request under load. Two findings were accepted with a scoped, documented suppression rather than disabled globally: the loading effects set state synchronously to flip a flag, which is a genuine external transition rather than derived state. Disabling the rule file-wide would have made the job green and the rule worthless. All pass with no findings. Dependency pins are exact rather than ranged, and Starlette is pinned explicitly despite being a FastAPI transitive dependency, because a floating transitive dependency is a dependency not under the project's control.
 
 Testing during development surfaced a genuine production defect: `security.py` and `rate_limit.py` imported the `audit` *function* while calling `audit.audit(...)`, an attribute access on a function object. Logout and rate-limit enforcement therefore raised `AttributeError` and would have returned HTTP 500 in production. Three tests failed and exposed it. The lesson reinforced ADR-005 — the value of a layered design is that defects surface in cheap, obvious places rather than in production traffic.
+
+A second defect survived longer and matters more, because it is a lesson about what a test suite cannot see. Alembic derived its connection string with `str(engine.url)`, which renders the password as `***`, so every migration against a real server failed — while the suite stayed green, because it only ever ran against SQLite, a backend with no password. The project was structurally undeployable and no local check could have said so. The logic now lives in a named, tested function, `migration_url()`, and the regression test was verified by reintroducing the bug and confirming the suite goes red. That verification is the part worth keeping: a regression test that does not fail on the original defect is decoration.
 
 ## 8. Cloud Deployment
 
 Deployment is defined declaratively in `render.yaml` (Render Blueprint) and is reproducible from the repository. The API is deployed as a Docker image built from `backend/Dockerfile`, and the frontend is a static site built from `frontend/` and served from the edge.
 
-The database is deliberately **not** declared in the blueprint. Render's free tier permits exactly one free Postgres instance per workspace, and the connection string it generates does not survive the blueprint's YAML rendering when the generated password contains URL-reserved characters — the result is `password authentication failed` at boot. `DATABASE_URL` is therefore supplied manually (`sync: false`), which decouples the deployment from any particular provider: Neon, Supabase and a paid Render instance are all drop-in replacements. This is a better outcome than the original design rather than a workaround — it removes a provider-specific constraint from the reproducible path.
+The database is deliberately **not** declared in the blueprint. Render's free tier permits one free Postgres instance per workspace, and the connection string it generates does not survive the blueprint's YAML rendering when the generated password contains URL-reserved characters. `DATABASE_URL` is therefore supplied manually (`sync: false`), which decouples the deployment from any provider: Neon, Supabase and a paid Render instance are drop-in replacements. This removes a provider-specific constraint from the reproducible path rather than working around one.
 
-Configuration is environment-driven throughout. The database connection arrives as `DATABASE_URL`, normalised at a single point to accommodate Render's historical `postgres://` prefix, which SQLAlchemy 2 rejects. `SECRET_KEY` is generated by the platform rather than committed. `ENVIRONMENT=production` disables the OpenAPI endpoints and schema browsing. The frontend receives `VITE_API_URL` at build time.
+Configuration is environment-driven throughout. The database connection arrives as `DATABASE_URL`, normalised at a single point to accommodate Render's historical `postgres://` prefix, which SQLAlchemy 2 rejects. `SECRET_KEY` is generated by the platform rather than committed, `ENVIRONMENT=production` disables the OpenAPI endpoints, and the frontend receives `VITE_API_URL` at build time.
 
 Schema changes are managed by Alembic, applied by the container entrypoint before Uvicorn starts. This is deliberate and important: `create_all` cannot alter an existing table and would silently freeze the schema at first boot, which is a failure mode that appears weeks later, in production, with no error message.
 
@@ -187,23 +189,19 @@ Two deployment constraints are documented rather than hidden. Any free-tier web 
 
 Honest evaluation requires separating what was demonstrated from what was not.
 
-**Demonstrated.** A working, deployed, tested application with a public URL; 72 passing tests at 93.3% coverage; clean static analysis; a documented architecture with ten recorded decisions; a reproducible infrastructure definition.
+**Demonstrated.** A working, deployed, tested application with a public URL; 78 passing backend tests at 93.9% coverage and 7 front-end tests; clean static analysis on both stacks; ten recorded architecture decisions; a reproducible infrastructure definition.
 
-**Not demonstrated, and material to the research question.** The central hypothesis — that round-up saving changes behaviour for this population — is **not validated by this project**. The system was evaluated for engineering correctness and deployability, not for behavioural efficacy. No user study was conducted, and the cited evidence concerns populations and mechanisms that are adjacent to, not identical with, university students using a web round-up tool.
+**Not demonstrated, and material to the research question.** The central hypothesis — that round-up saving changes behaviour for this population — is **not validated by this project**. The system was evaluated for engineering correctness and deployability, not for behavioural efficacy. No user study was conducted, and the cited evidence concerns populations and mechanisms adjacent to, not identical with, university students using a web round-up tool.
 
 The most likely limitation of the mechanism is its arithmetic. Choi et al. (2024) put the measured effect of automatic saving at roughly 0.6% of income; the round-up component alone is smaller. A student spending €400 monthly with an average round-up of €0.30 accumulates roughly €10–12 monthly, or about €120–145 annually — meaningful against a €600 emergency fund, negligible against a €2,400 laptop. The honest framing is that PocketWise is an *initiator* mechanism: it establishes a saving habit at near-zero cost and builds a visible pot, rather than a strategy for material wealth accumulation.
 
-**Future work**, in priority order: replace the in-process rate limiter with a shared store before any horizontal scaling; add a monthly aggregate table if per-user history grows enough for on-read aggregation to dominate; introduce a password-change endpoint and account deletion, both currently absent and both required in practice; and run a genuine user study, which would convert the project's strongest borrowed evidence into its own.
-
-## 10. Conclusion
+**Future work**, in priority order: replace the in-process rate limiter with a shared store before any horizontal scaling; add a monthly aggregate table if per-user history grows enough for on-read aggregation to dominate; introduce a password-change endpoint and account deletion, both currently absent and both required in practice; and run a genuine user study, which would convert the project's strongest borrowed evidence into its own.## 10. Conclusion
 
 PocketWise demonstrates that the fragility of student saving behaviour is an engineering problem as much as an educational one. By removing the decision rather than by improving the information supporting it, and by attaching abstract savings to concrete goals, the system applies well-established findings on defaults and mental accounting to a population where conventional interventions are documented to decay.
 
 The engineering reinforced the argument. Isolating pure business rules made the most valuable logic testable in isolation and directly enabled the discovery of a production-breaking authentication defect. Storing only facts and deriving savings state made deletion correct by construction. Integer-cent arithmetic discharged the one correctness requirement that could not be compromised.
 
-The result is a deployed, tested, documented system that solves a real problem within honest limits — and that states those limits rather than concealing them.
-
----
+The result is a deployed, tested, documented system that solves a real problem within honest limits — and that states those limits rather than concealing them.---
 
 ## References
 
@@ -227,7 +225,8 @@ The result is a deployed, tested, documented system that solves a real problem w
 | `backend/app/domain.py` | Pure business rules (round-up, cascade, totals), no I/O |
 | `backend/app/security.py` | PBKDF2 hashing, JWT issue/verify, revocation |
 | `backend/app/routers/` | HTTP layer: auth and ledger endpoints |
-| `backend/tests/` | 72 tests, 93.3% coverage |
+| `backend/tests/` | 78 tests, 93.9% coverage |
+| `frontend/src/api.test.js` | 7 tests: currency formatting and error shape |
 | `backend/alembic/` | Schema migrations |
 | `frontend/src/` | React SPA (auth, dashboard) |
 | `docs/architecture.md` | ADR-001 to ADR-010 |
@@ -250,4 +249,4 @@ cd frontend
 npm ci && npm run dev
 ```
 
-Verification: `pytest` (72 passed), `ruff check .`, `ruff format --check .`, `mypy app scripts`.
+Verification: `pytest` (78 passed), `ruff check .`, `ruff format --check .`, `mypy app scripts`, and on the front end `npm run lint`, `npm test`, `npm run build`.

@@ -125,8 +125,15 @@ export default function Dashboard({ token, onLogout, onUnauthorized }) {
 
   const reload = useCallback(() => Promise.all([loadData(), loadGoals()]), [loadData, loadGoals]);
 
+  // Both loads are async and guarded by a sequence number, so the synchronous
+  // part of each call only flips a loading flag before awaiting the network.
+  // The rule targets setState used to *derive* state; here it reflects a real
+  // external transition (a fetch started by a dependency change), and the
+  // alternative -- a data layer -- is a dependency ADR-008 declines on purpose.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => { loadGoals(); }, [loadGoals]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     if (confirm && confirmRef.current) confirmRef.current.focus();

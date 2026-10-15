@@ -5,7 +5,7 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
-from app.database import Base
+from app.database import Base, migration_url
 from app.database import engine as default_engine
 
 config = context.config
@@ -17,12 +17,7 @@ target_metadata = Base.metadata
 
 DATABASE_URL = config.get_main_option("sqlalchemy.url") or None
 if DATABASE_URL is None:
-    # `str(url)` renders the password as `***`, which yields "password
-    # authentication failed" against any real server. SQLite has no password,
-    # so this only surfaced once migrations ran against PostgreSQL.
-    # The trailing `%` doubling is ConfigParser interpolation: `%%` reads back
-    # as a literal `%` in the connection string.
-    DATABASE_URL = default_engine.url.render_as_string(hide_password=False).replace("%", "%%")
+    DATABASE_URL = migration_url(default_engine)
 
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 

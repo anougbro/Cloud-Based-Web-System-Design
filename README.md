@@ -9,7 +9,7 @@ Documents associés :
 - `docs/architecture.md` : décisions d'architecture (format ADR).
 - `docs/security.md` : modèle de menaces, contrôles implémentés, risques résiduels.
 
-Licence : à définir — aucun fichier `LICENSE` n'est présent dans le dépôt à ce jour.
+Licence : MIT — voir [`LICENSE`](LICENSE).
 
 ---
 
@@ -270,9 +270,9 @@ npm run build
 npm audit
 ```
 
-État mesuré au moment de la rédaction : 72 cas de test passent, couverture globale de 93 %, seuil de 85 % appliqué par `pyproject.toml` (`--cov-fail-under=85`). `ruff check .`, `ruff format --check .`, `mypy app scripts` (mode `strict`) et `pip-audit -r requirements.txt` passent sans aucun signalement.
+État mesuré au moment de la rédaction : 78 cas de test pytest passent (couverture globale de 93,9 %, seuil de 85 % appliqué par `pyproject.toml` — `--cov-fail-under=85`) et 7 cas de test vitest. `ruff check .`, `ruff format --check .`, `mypy app scripts` (mode `strict`) et `pip-audit -r requirements.txt` passent sans signalement. Côté front : `npm run lint` (ESLint, règles React Hooks), `npm test` et `npm audit --audit-level=high` sont également verts.
 
-Côté JavaScript, `npm audit --audit-level=high` ne remonte aucune vulnérabilité et le build Vite 8 produit un chunk JavaScript de 155 kB (50 kB compressé), 4,7 kB de CSS (1,6 kB compressé).
+Côté JavaScript, `npm audit --audit-level=high` ne remonte aucune vulnérabilité et le build Vite 8 produit un chunk JavaScript de 157 kB (51 kB compressé), 13,6 kB de CSS (3,6 kB compressé).
 
 Les cas de test notables :
 
@@ -290,7 +290,7 @@ Intégration continue : `.github/workflows/ci.yml` exécute trois jobs bloquants
 | Job | Étapes |
 |---|---|
 | `backend` | `ruff check` · `ruff format --check` · `mypy app scripts` · `pip-audit -r requirements.txt` · `pytest` avec seuil de couverture · publication du rapport `.coverage` en artefact |
-| `frontend` | `npm ci` · `npm audit --audit-level=high` · `npm run build` · publication de `dist/` en artefact |
+| `frontend` | `npm ci` · `npm run lint` · `npm test` · `npm audit --audit-level=high` · `npm run build` · publication de `dist/` en artefact |
 | `container` | construction de l'image Docker avec cache BuildKit, démarrage réel du conteneur, sonde de `/health` et appel de `POST /auth/register` |
 
 Le workflow déclare `permissions: contents: read`, un `timeout-minutes` par job, une annulation des exécutions obsolètes (`concurrency`) et épingle chaque action GitHub par SHA plutôt que par tag.
