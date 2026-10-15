@@ -33,8 +33,12 @@ services:
         value: INFO
       - key: CORS_ORIGINS
         value: https://pocketwise-web.onrender.com
-      - key: ALLOWED_HOSTS
-        value: pocketwise-api.onrender.com
+      # ALLOWED_HOSTS is intentionally absent. When it is empty,
+      # app/main.py skips TrustedHostMiddleware entirely; when it is set, a
+      # mismatch between the value and the hostname Render actually assigned
+      # makes every request return 400. Set it to the real hostname once the
+      # service exists -- it is a hardening step, not a functional one.
+      #   ALLOWED_HOSTS: pocketwise-api.onrender.com
 
   - type: web
     name: pocketwise-web
