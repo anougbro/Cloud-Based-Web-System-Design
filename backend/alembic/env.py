@@ -17,7 +17,12 @@ target_metadata = Base.metadata
 
 DATABASE_URL = config.get_main_option("sqlalchemy.url") or None
 if DATABASE_URL is None:
-    DATABASE_URL = str(default_engine.url).replace("%", "%%")
+    # `str(url)` renders the password as `***`, which yields "password
+    # authentication failed" against any real server. SQLite has no password,
+    # so this only surfaced once migrations ran against PostgreSQL.
+    # The trailing `%` doubling is ConfigParser interpolation: `%%` reads back
+    # as a literal `%` in the connection string.
+    DATABASE_URL = default_engine.url.render_as_string(hide_password=False).replace("%", "%%")
 
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
