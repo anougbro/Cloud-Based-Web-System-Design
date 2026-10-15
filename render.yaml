@@ -3,16 +3,15 @@
 # Deploy with: connect this repository in the Render dashboard and apply the
 # blueprint, or use `render blueprint launch`.
 #
-# The `databases[].plan: free` below is a 30-day trial. Render deletes a free
-# PostgreSQL instance after 30 days of inactivity, which takes the API down
-# with a "database does not exist" error. Switch to a paid plan (starter,
-# 7 USD/month) for a durable deployment.
-
-databases:
-  - name: pocketwise-db
-    plan: free
-    databaseName: pocketwise
-    postgresMajorVersion: "16"
+# The database is NOT provisioned by this blueprint. Render's free tier allows
+# only one free Postgres instance per workspace, and the connection string it
+# generates does not survive the blueprint's YAML rendering when the generated
+# password contains URL-reserved characters. `DATABASE_URL` is therefore
+# supplied manually (`sync: false`), which also makes the service deployable
+# against any managed Postgres -- Neon, Supabase, or a paid Render instance.
+#
+# Migrations are applied by the container entrypoint before Uvicorn starts, so
+# the schema is correct on first boot whatever the database state.
 
 services:
   - type: web
@@ -25,9 +24,7 @@ services:
     autoDeploy: true
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: pocketwise-db
-          property: connectionString
+        sync: false
       - key: SECRET_KEY
         generateValue: true
       - key: ENVIRONMENT
