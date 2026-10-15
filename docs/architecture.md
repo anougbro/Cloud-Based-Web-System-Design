@@ -25,9 +25,9 @@ Format ADR concis : contexte, décision, conséquences. Chaque décision est nu
 
 **Statut** : accepté.
 
-**Contexte** : la production est hébergée sur Render, qui fournit PostgreSQL managé. Le poste de développement ne l'a pas.
+**Contexte** : la production est hébergée sur Render, qui fournit un Postgres managé, mais dont le palier gratuit est limité à une seule instance par espace de travail et dont la chaîne de connexion générée ne traverse pas le rendu YAML du blueprint lorsque le mot de passe contient des caractères réservés. Le poste de développement n'a pas de Postgres.
 
-**Décision** : une seule URL de connexion, `DATABASE_URL`, normalisée par `app/database.py:12`. `postgres://` est réécrit en `postgresql://` car le préfixe historique de Render n'est pas accepté par SQLAlchemy 2. À défaut, repli sur `sqlite:///./pocketwise.db`.
+**Décision** : une seule URL de connexion, `DATABASE_URL`, normalisée par `app/database.py:12`. `postgres://` est réécrit en `postgresql://` car le préfixe historique de Render n'est pas accepté par SQLAlchemy 2. À défaut, repli sur `sqlite:///./pocketwise.db`. La base n'est pas déclarée dans `render.yaml` : `DATABASE_URL` y est fournie manuellement (`sync: false`), ce qui rend le déploiement indépendant du fournisseur — Neon, Supabase ou une instance Render payante sont des remplacements directs.
 
 **Justification** : deux moteurs de base pour deux environnements obligeraient à écrire et maintenir deux couches d'accès aux données. Les requêtes employées (`SUM`, `FILTER`, `COALESCE`, sous-requêtes conditionnelles) sont couvertes par les deux moteurs.
 

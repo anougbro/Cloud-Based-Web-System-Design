@@ -299,13 +299,14 @@ Le workflow déclare `permissions: contents: read`, un `timeout-minutes` par job
 
 ## Déploiement
 
-`render.yaml` est un *blueprint* Render : connecté au dépôt, Render lit le fichier et crée ou met à jour les trois ressources qu'il décrit.
+`render.yaml` est un *blueprint* Render : connecté au dépôt, Render lit le fichier et crée ou met à jour les deux services qu'il décrit.
 
 | Ressource | Type | Détails |
 |---|---|---|
-| `pocketwise-db` | PostgreSQL 16 | `plan: free`, base `pocketwise`. Alimente `DATABASE_URL` de l'API. |
 | `pocketwise-api` | Web service Docker | `dockerfilePath: ./backend/Dockerfile`, `plan: free`, `healthCheckPath: /health/ready`. |
 | `pocketwise-web` | Site statique | `rootDir: frontend`, `buildCommand: npm ci && npm run build`, publication de `dist`, réécriture SPA vers `index.html`. |
+
+`DATABASE_URL` n'est **pas** créée par le blueprint (`sync: false`) : elle est fournie au moment du déploiement. Le palier gratuit de Render n'autorise qu'une seule base Postgres gratuite par espace de travail, et sa chaîne de connexion ne traverse pas le rendu YAML lorsque le mot de passe contient des caractères réservés. Fournir l'URL manuellement supprime les deux contraintes et rend le déploiement indépendant du fournisseur — Neon, Supabase ou une instance Render payante conviennent.
 
 Variables d'environnement gérées par le blueprint : `DATABASE_URL` (injectée depuis la base), `SECRET_KEY` (`generateValue: true`, donc une clé aléatoire par déploiement), `ENVIRONMENT=production` (désactive `/docs`), `LOG_LEVEL`, `CORS_ORIGINS` (origine du site statique), `ALLOWED_HOSTS`, `VITE_API_URL` (URL de l'API, injectée au build du site).
 
@@ -323,9 +324,9 @@ URL de production : `<URL_RENDER_ICI>` (à renseigner une fois le blueprint Rend
 
 ### Avertissement sur le plan gratuit
 
-**La base PostgreSQL en plan gratuit Render est supprimée au bout de 30 jours.** Le service API lui aussi s'arrête après une période d'inactivité, ce qui provoque des démarrages à froid. Les données de démonstration et les comptes utilisateurs ne sont pas conservés : un redéploiement repart sur une base vide, et une base gratuite ne doit pas être considérée comme un stockage durable.
+**Le service API s'arrête après une période d'inactivité**, ce qui provoque des démarrages à froid sur la première requête suivante. La base n'est pas provisionnée par le blueprint : c'est à l'exploitant de choisir un Postgres managé. Un palier gratuit (Neon, Supabase) convient à une démonstration ; ce n'est pas un stockage durable.
 
-Pour un déploiement qui tient dans la durée, il faut un plan payant sur la base et sur le service web. `render.yaml` est écrit avec `plan: free` ; passer `plan: starter` (ou `standard`) sur les deux ressources suffit à lever la principale cause de perte de données, sans modification de code.
+Pour un déploiement qui tient dans la durée, il faut un plan payant sur le service web (`render.yaml` est écrit avec `plan: free` ; passer `plan: starter` suffit) et une base managée avec des sauvegardes activées.
 
 ---
 
