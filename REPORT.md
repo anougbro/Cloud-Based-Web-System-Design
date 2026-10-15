@@ -107,7 +107,21 @@ The round-up is `-amount_cents % 100`: an already-round amount yields zero, matc
 
 Total savings are distributed across goals in creation order, oldest first. A filled goal does not overflow into the next; once all goals are satisfied the remainder is surfaced as `unallocated_savings_cents` rather than silently discarded.
 
-### 4.4 Data model
+### 4.5 Interface design
+
+The front end is a single hand-written stylesheet with no CSS framework. The design system is expressed as custom properties — a type scale, a 4px spacing scale, three elevation levels, and semantic colour tokens — and every component consumes those tokens rather than hard-coded values. There is no build step for styling and no runtime CSS-in-JS, so the whole visual layer costs 12 kB uncompressed (3.3 kB gzipped).
+
+Three decisions are worth naming:
+
+**Money is treated as data, not prose.** Every figure uses tabular numerals so columns of amounts align on the decimal point regardless of digit count. On a screen where a user compares eleven thousand against four thousand, misaligned figures cost real scanning effort.
+
+**Elevation is hairline-first.** Surfaces are defined by a one-pixel border plus a single soft shadow, in three steps. Heavy drop shadows were rejected: they separate elements visually but detach them from the same surface, which is wrong for a dense financial table.
+
+**The palette carries two accents, not one.** `--accent` is the interactive colour and brightens in dark mode, where it suits dark-on-bright controls. `--accent-solid` is reserved for surfaces that carry white text. A single accent produced a measured 1.8:1 contrast ratio in dark mode; separating the two brings it to 21:1. The token boundary exists specifically to make that failure impossible.
+
+Accessibility was treated as a requirement rather than a pass at the end. Focus is visible on every interactive element via a 3px outline that survives both colour schemes, colour is never the sole carrier of meaning (income and expense differ in sign as well as hue), motion respects `prefers-reduced-motion`, and light and dark schemes are both derived from the same token set rather than maintained separately.
+
+### 4.6 Data model
 
 ```mermaid
 erDiagram
