@@ -53,4 +53,6 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        value: https://pocketwise-api.onrender.com
+        # Render appends a suffix when the preferred service name is taken.
+        # This must match the API's real hostname or the SPA hangs on login.
+        value: https://pocketwise-api-5p3j.onrender.com
